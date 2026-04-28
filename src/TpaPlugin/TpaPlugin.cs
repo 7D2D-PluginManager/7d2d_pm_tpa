@@ -8,6 +8,7 @@ using PluginManager.Api.Capabilities.Implementations.Translations;
 using PluginManager.Api.Capabilities.Implementations.Utils;
 using PluginManager.Api.Contracts;
 using PluginManager.Api.Hooks;
+using PluginManager.Config;
 using PluginManager.Localization;
 
 namespace TpaPlugin;
@@ -21,7 +22,7 @@ public class TpaPlugin : BasePlugin
 
     private IPlayerLocalization _localization;
     private IPlayerUtil _playerUtil;
-    private PluginConfig _config;
+    private PluginConfig _pluginConfig;
 
     private readonly Dictionary<string, ClientInfo> _online = new();
     private readonly Dictionary<string, TpRequest> _pending = new();
@@ -35,7 +36,7 @@ public class TpaPlugin : BasePlugin
         _playerUtil = Capabilities.Get<IPlayerUtil>();
         var playerLanguageStore = Capabilities.Get<IPlayerLanguageStore>();
         _localization = new JsonPlayerLocalizationFactory(playerLanguageStore).Create(Path.Combine(ModulePath, "lang"));
-        _config = PluginConfig.Load(Path.Combine(ModulePath, "config.txt"));
+        _pluginConfig = new JsonConfigReader().Read<PluginConfig>(Path.Combine(ModulePath, "config.json"));
 
         RegisterCommand("tp", "Request teleport to a player", OnTp);
         RegisterCommand("tpa", "Accept pending teleport request", OnAccept);
@@ -79,7 +80,7 @@ public class TpaPlugin : BasePlugin
 
         if (_cooldowns.TryGetValue(senderId, out var last))
         {
-            var remaining = (int)(_config.CooldownSeconds - (DateTime.UtcNow - last).TotalSeconds);
+            var remaining = (int)(_pluginConfig.Delay - (DateTime.UtcNow - last).TotalSeconds);
             if (remaining > 0)
             {
                 Reply(ctx.ClientInfo, "Cooldown", remaining);
