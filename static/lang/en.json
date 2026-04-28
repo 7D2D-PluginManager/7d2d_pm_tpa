@@ -1,0 +1,20 @@
+{
+  "Bad args tp": "Invalid arguments. Example: /tp <nickname>",
+
+  "Player not found": "Player not found: {0}",
+  "Self teleport": "Teleport to yourself?",
+  "Cooldown": "Teleport cooldown: {0}s",
+
+  "Request sent": "Teleport request sent to {0}",
+  "Request received": "{0} wants to teleport to you. /tpa to accept!",
+
+  "No pending request": "You have no pending teleport requests",
+  "Request expired": "The teleport request has expired",
+  "Sender offline": "Player {0} is offline",
+  "Target position unknown": "Your position is unavailable",
+
+  "Request accepted": "{0} accepted your teleport request",
+  "You accepted": "You accepted the teleport request from {0}",
+  "Request denied": "{0} denied your teleport request",
+  "You denied": "You denied teleport request from {0}"
+}
