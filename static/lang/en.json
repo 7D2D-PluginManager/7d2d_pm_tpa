@@ -5,7 +5,7 @@
 
   "Player not found": "Player not found: {0}",
   "Self teleport": "Teleport to yourself?",
-  "Cooldown": "Teleport cooldown: {0} mins",
+  "Cooldown": "Teleport cooldown: {0:00}:{1:00}",
 
   "Request sent": "Teleport request sent to {0}",
   "Request received": "{0} wants to teleport to you. /tpa to accept!",

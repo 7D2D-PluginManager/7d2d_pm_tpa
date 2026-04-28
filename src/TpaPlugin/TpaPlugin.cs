@@ -82,7 +82,7 @@ public class TpaPlugin : BasePlugin
             var remaining = (int)(_pluginConfig.Delay - (DateTime.UtcNow - last).TotalSeconds);
             if (remaining > 0)
             {
-                Reply(ctx.ClientInfo, "Cooldown", remaining/60);
+                Reply(ctx.ClientInfo, "Cooldown", remaining/60,remaining%60);
                 return;
             }
         }
