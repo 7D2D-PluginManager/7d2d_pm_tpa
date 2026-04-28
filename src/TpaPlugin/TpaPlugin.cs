@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using PluginManager.Api;
 using PluginManager.Api.Capabilities.Implementations.Commands;
 using PluginManager.Api.Capabilities.Implementations.Events.GameEvents;
@@ -24,7 +25,7 @@ public class TpaPlugin : BasePlugin
     private IPlayerUtil _playerUtil;
     private PluginConfig _pluginConfig;
 
-    private readonly Dictionary<string, ClientInfo> _online = new();
+    private Dictionary<string, ClientInfo> _online = new();
     private readonly Dictionary<string, TpRequest> _pending = new();
     private readonly Dictionary<string, DateTime> _cooldowns = new();
 
@@ -36,6 +37,7 @@ public class TpaPlugin : BasePlugin
         var playerLanguageStore = Capabilities.Get<IPlayerLanguageStore>();
         _localization = new JsonPlayerLocalizationFactory(playerLanguageStore).Create(Path.Combine(ModulePath, "lang"));
         _pluginConfig = new JsonConfigReader().Read<PluginConfig>(Path.Combine(ModulePath, "config.json"));
+        _online = _playerUtil.GetClientInfoList().ToDictionary(info => info.CrossplatformId, info => info);
 
         RegisterCommand("tp", "Request teleport to a player", OnTp);
         RegisterCommand("tpa", "Accept pending teleport request", OnAccept);
@@ -82,7 +84,7 @@ public class TpaPlugin : BasePlugin
             var remaining = (int)(_pluginConfig.Delay - (DateTime.UtcNow - last).TotalSeconds);
             if (remaining > 0)
             {
-                Reply(ctx.ClientInfo, "Cooldown", remaining/60,remaining%60);
+                Reply(ctx.ClientInfo, "Cooldown", remaining / 60, remaining % 60);
                 return;
             }
         }
@@ -177,6 +179,7 @@ public class TpaPlugin : BasePlugin
                 return ci;
             }
         }
+
         return null;
     }
 
