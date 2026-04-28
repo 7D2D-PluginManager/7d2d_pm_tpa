@@ -1,4 +1,6 @@
 {
+  "Tag": "[ffaaaa][TPA][-] ",
+
   "Bad args tp": "Invalid arguments. Example: /tp <nickname>",
 
   "Player not found": "Player not found: {0}",

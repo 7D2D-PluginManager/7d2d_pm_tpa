@@ -28,7 +28,6 @@ public class TpaPlugin : BasePlugin
     private readonly Dictionary<string, TpRequest> _pending = new();
     private readonly Dictionary<string, DateTime> _cooldowns = new();
 
-    private const string Tag = "[ffaaaa][TP][-] ";
     private const int RequestTimeoutSeconds = 60;
 
     protected override void OnLoad()
@@ -183,7 +182,8 @@ public class TpaPlugin : BasePlugin
 
     private void Reply(ClientInfo ci, string key, params object[] args)
     {
+        var tag = _localization.Translate(ci.CrossplatformId, "Tag");
         var text = _localization.Translate(ci.CrossplatformId, key, args);
-        _playerUtil.PrintToChat(ci.EntityId, $"{Tag}{text}");
+        _playerUtil.PrintToChat(ci.EntityId, $"{tag}{text}");
     }
 }
