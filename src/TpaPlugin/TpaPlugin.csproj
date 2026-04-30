@@ -57,6 +57,14 @@
             <HintPath>$(PluginManagerApiPath)PluginManager.Api.dll</HintPath>
             <Private>False</Private>
         </Reference>
+        <Reference Include="PluginManager.Api">
+            <HintPath>$(PluginManagerApiPath)PluginManager.Config.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="PluginManager.Api">
+            <HintPath>$(PluginManagerApiPath)PluginManager.Localization.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
     </ItemGroup>
     <Target Name="CopyToPluginFolder" AfterTargets="Build">
         <ItemGroup>

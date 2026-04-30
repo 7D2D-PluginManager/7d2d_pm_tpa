@@ -4,8 +4,9 @@
   "Bad args tp": "Example: [6FDC64]/tp <nickname>[-]",
 
   "Player not found": "Player [F0A66D]{0}[-] not found!",
+  "Many results": "Many results for [F0A66D]{0}[-]",
   "Self teleport": "Teleport to yourself?",
-  "Cooldown": "Teleport cooldown: [F0A66D]{0:00}:{1:00}[-]",
+  "Teleport cooldown": "Teleport cooldown: [F0A66D]{0:hh\\\\:mm\\\\:ss}[-]",
 
   "Request sent": "Request sent to [F0A66D]{0}[-]",
   "Request received": "[F0A66D]{0}[-] wants to tp to you. [6FDC64]/tpa[-] to accept!",

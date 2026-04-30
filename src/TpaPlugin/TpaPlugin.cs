@@ -25,52 +25,30 @@ public class TpaPlugin : BasePlugin
     private IPlayerUtil _playerUtil;
     private PluginConfig _pluginConfig;
 
-    private Dictionary<string, ClientInfo> _online = new();
     private readonly Dictionary<string, TpRequest> _pending = new();
-    private readonly Dictionary<string, DateTime> _cooldowns = new();
-
-    private const int RequestTimeoutSeconds = 60;
+    private readonly Dictionary<string, long> _nextTeleportTime = new();
 
     protected override void OnLoad()
     {
+        _localization = GetPlayerLocalization();
+        _pluginConfig = ReadPluginConfig();
         _playerUtil = Capabilities.Get<IPlayerUtil>();
-        var playerLanguageStore = Capabilities.Get<IPlayerLanguageStore>();
-        _localization = new JsonPlayerLocalizationFactory(playerLanguageStore).Create(Path.Combine(ModulePath, "lang"));
-        _pluginConfig = new JsonConfigReader().Read<PluginConfig>(Path.Combine(ModulePath, "config.json"));
-        _online = _playerUtil.GetClientInfoList().ToDictionary(info => info.CrossplatformId, info => info);
 
         RegisterCommand("tp", "Request teleport to a player", OnTp);
         RegisterCommand("tpa", "Accept pending teleport request", OnAccept);
         RegisterCommand("tpd", "Deny pending teleport request", OnDeny);
 
-        RegisterEventHandler<PlayerJoinedGameEvent>(OnPlayerJoined, HookMode.Post);
-        RegisterEventHandler<PlayerSpawnedInWorldEvent>(OnPlayerSpawned, HookMode.Post);
         RegisterEventHandler<PlayerDisconnectedEvent>(OnPlayerDisconnected, HookMode.Post);
-    }
-
-    private HookResult OnPlayerJoined(PlayerJoinedGameEvent evt)
-    {
-        _online[evt.ClientInfo.CrossplatformId] = evt.ClientInfo;
-        return HookResult.Continue;
-    }
-
-    private HookResult OnPlayerSpawned(PlayerSpawnedInWorldEvent evt)
-    {
-        _online[evt.ClientInfo.CrossplatformId] = evt.ClientInfo;
-        return HookResult.Continue;
     }
 
     private HookResult OnPlayerDisconnected(PlayerDisconnectedEvent evt)
     {
-        _online.Remove(evt.ClientInfo.CrossplatformId);
         _pending.Remove(evt.ClientInfo.CrossplatformId);
         return HookResult.Continue;
     }
 
     private void OnTp(ICommandContext ctx)
     {
-        _online[ctx.ClientInfo.CrossplatformId] = ctx.ClientInfo;
-
         if (ctx.Args.Count < 1)
         {
             Reply(ctx.ClientInfo, "Bad args tp");
@@ -79,60 +57,65 @@ public class TpaPlugin : BasePlugin
 
         var senderId = ctx.ClientInfo.CrossplatformId;
 
-        if (_cooldowns.TryGetValue(senderId, out var last))
-        {
-            var remaining = (int)(_pluginConfig.Delay - (DateTime.UtcNow - last).TotalSeconds);
-            if (remaining > 0)
-            {
-                Reply(ctx.ClientInfo, "Cooldown", remaining / 60, remaining % 60);
-                return;
-            }
-        }
+        var unixTime = DateTimeOffset.Now.ToUnixTimeSeconds();
 
-        var targetName = ctx.Args[0];
-        var target = FindByName(targetName);
-
-        if (target == null)
+        if (_nextTeleportTime.TryGetValue(senderId, out var nextTeleportTime) && nextTeleportTime > unixTime)
         {
-            Reply(ctx.ClientInfo, "Player not found", targetName);
+            var cooldown = TimeSpan.FromSeconds(unixTime - nextTeleportTime);
+            Reply(ctx.ClientInfo, "Teleport cooldown", cooldown);
             return;
         }
 
-        if (target.CrossplatformId == senderId)
+        var targetName = ctx.Args[0];
+        var target = FindTargetByName(targetName);
+
+        switch (target.Count)
+        {
+            case 0:
+                Reply(ctx.ClientInfo, "Player not found", targetName);
+                return;
+            case > 1:
+                Reply(ctx.ClientInfo, "Many results", targetName);
+                return;
+        }
+
+        var targetClient = target[0];
+
+        if (targetClient.CrossplatformId == senderId)
         {
             Reply(ctx.ClientInfo, "Self teleport");
             return;
         }
 
-        _pending[target.CrossplatformId] = new TpRequest
+        _pending[targetClient.CrossplatformId] = new TpRequest
         {
             Sender = ctx.ClientInfo,
-            CreatedAt = DateTime.UtcNow
+            ExpiredAt = unixTime + _pluginConfig.RequestTimeout,
         };
 
-        Reply(ctx.ClientInfo, "Request sent", target.Name);
-        Reply(target, "Request received", ctx.ClientInfo.Name);
+        Reply(ctx.ClientInfo, "Request sent", targetClient.Name);
+        Reply(targetClient, "Request received", ctx.ClientInfo.Name);
     }
 
     private void OnAccept(ICommandContext ctx)
     {
-        _online[ctx.ClientInfo.CrossplatformId] = ctx.ClientInfo;
-
         if (!_pending.TryGetValue(ctx.ClientInfo.CrossplatformId, out var req))
         {
             Reply(ctx.ClientInfo, "No pending request");
             return;
         }
 
+        var unixTime = DateTimeOffset.Now.ToUnixTimeSeconds();
+
         _pending.Remove(ctx.ClientInfo.CrossplatformId);
 
-        if ((DateTime.UtcNow - req.CreatedAt).TotalSeconds > RequestTimeoutSeconds)
+        if (req.ExpiredAt < unixTime)
         {
             Reply(ctx.ClientInfo, "Request expired");
             return;
         }
 
-        if (!_online.ContainsKey(req.Sender.CrossplatformId))
+        if (_playerUtil.GetClientInfoByEntityId(req.Sender.EntityId) == null)
         {
             Reply(ctx.ClientInfo, "Sender offline", req.Sender.Name);
             return;
@@ -146,7 +129,8 @@ public class TpaPlugin : BasePlugin
         }
 
         _playerUtil.Teleport(req.Sender.EntityId, position);
-        _cooldowns[req.Sender.CrossplatformId] = DateTime.UtcNow;
+        _nextTeleportTime[req.Sender.CrossplatformId] = unixTime + _pluginConfig.Delay;
+        ;
 
         Reply(req.Sender, "Request accepted", ctx.ClientInfo.Name);
         Reply(ctx.ClientInfo, "You accepted", req.Sender.Name);
@@ -163,24 +147,14 @@ public class TpaPlugin : BasePlugin
         _pending.Remove(ctx.ClientInfo.CrossplatformId);
 
         Reply(ctx.ClientInfo, "You denied", req.Sender.Name);
-
-        if (_online.ContainsKey(req.Sender.CrossplatformId))
-        {
-            Reply(req.Sender, "Request denied", ctx.ClientInfo.Name);
-        }
+        Reply(req.Sender, "Request denied", ctx.ClientInfo.Name);
     }
 
-    private ClientInfo FindByName(string name)
+    private List<ClientInfo> FindTargetByName(string name)
     {
-        foreach (var ci in _online.Values)
-        {
-            if (string.Equals(ci.Name, name, StringComparison.OrdinalIgnoreCase))
-            {
-                return ci;
-            }
-        }
-
-        return null;
+        return _playerUtil.GetClientInfoList()
+            .Where(client => client.Name.IndexOf(name, StringComparison.OrdinalIgnoreCase) >= 0)
+            .ToList();
     }
 
     private void Reply(ClientInfo ci, string key, params object[] args)
@@ -188,5 +162,17 @@ public class TpaPlugin : BasePlugin
         var tag = _localization.Translate(ci.CrossplatformId, "Tag");
         var text = _localization.Translate(ci.CrossplatformId, key, args);
         _playerUtil.PrintToChat(ci.EntityId, $"{tag}{text}");
+    }
+
+    private IPlayerLocalization GetPlayerLocalization()
+    {
+        var playerLanguageStore = Capabilities.Get<IPlayerLanguageStore>();
+        return _localization = new JsonPlayerLocalizationFactory(playerLanguageStore)
+            .Create(Path.Combine(ModulePath, "lang"));
+    }
+
+    private PluginConfig ReadPluginConfig()
+    {
+        return new JsonConfigReader().Read<PluginConfig>(Path.Combine(ModulePath, "config.json"));
     }
 }

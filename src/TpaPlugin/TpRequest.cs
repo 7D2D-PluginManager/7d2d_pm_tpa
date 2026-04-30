@@ -1,4 +1,3 @@
-using System;
 using PluginManager.Api.Contracts;
 
 namespace TpaPlugin;
@@ -6,5 +5,5 @@ namespace TpaPlugin;
 public class TpRequest
 {
     public ClientInfo Sender { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public long ExpiredAt { get; set; }
 }
