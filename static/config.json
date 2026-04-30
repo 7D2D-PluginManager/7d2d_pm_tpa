@@ -1,3 +1,4 @@
 {
+    "RequestTimeout": 60,
     "Delay": 1800
 }
