@@ -41,9 +41,28 @@ public class TpaPlugin : BasePlugin
         RegisterEventHandler<PlayerDisconnectedEvent>(OnPlayerDisconnected, HookMode.Post);
     }
 
+    protected override void OnUnload()
+    {
+        _pending.Clear();
+        _nextTeleportTime.Clear();
+    }
+
     private HookResult OnPlayerDisconnected(PlayerDisconnectedEvent evt)
     {
-        _pending.Remove(evt.ClientInfo.CrossplatformId);
+        var disconnectedId = evt.ClientInfo.CrossplatformId;
+
+        _pending.Remove(disconnectedId);
+
+        var requestsFromDisconnected = _pending
+            .Where(kvp => kvp.Value.Sender.CrossplatformId == disconnectedId)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var key in requestsFromDisconnected)
+        {
+            _pending.Remove(key);
+        }
+
         return HookResult.Continue;
     }
 
@@ -61,7 +80,7 @@ public class TpaPlugin : BasePlugin
 
         if (_nextTeleportTime.TryGetValue(senderId, out var nextTeleportTime) && nextTeleportTime > unixTime)
         {
-            var cooldown = TimeSpan.FromSeconds(unixTime - nextTeleportTime);
+            var cooldown = TimeSpan.FromSeconds(nextTeleportTime - unixTime);
             Reply(ctx.ClientInfo, "Teleport cooldown", cooldown);
             return;
         }
@@ -99,7 +118,7 @@ public class TpaPlugin : BasePlugin
 
     private void OnAccept(ICommandContext ctx)
     {
-        if (!_pending.TryGetValue(ctx.ClientInfo.CrossplatformId, out var req))
+        if (!_pending.TryGetValue(ctx.ClientInfo.CrossplatformId, out var request))
         {
             Reply(ctx.ClientInfo, "No pending request");
             return;
@@ -109,15 +128,15 @@ public class TpaPlugin : BasePlugin
 
         _pending.Remove(ctx.ClientInfo.CrossplatformId);
 
-        if (req.ExpiredAt < unixTime)
+        if (request.ExpiredAt < unixTime)
         {
             Reply(ctx.ClientInfo, "Request expired");
             return;
         }
 
-        if (_playerUtil.GetClientInfoByEntityId(req.Sender.EntityId) == null)
+        if (_playerUtil.GetClientInfoByEntityId(request.Sender.EntityId) == null)
         {
-            Reply(ctx.ClientInfo, "Sender offline", req.Sender.Name);
+            Reply(ctx.ClientInfo, "Sender offline", request.Sender.Name);
             return;
         }
 
@@ -128,17 +147,16 @@ public class TpaPlugin : BasePlugin
             return;
         }
 
-        _playerUtil.Teleport(req.Sender.EntityId, position);
-        _nextTeleportTime[req.Sender.CrossplatformId] = unixTime + _pluginConfig.Delay;
-        ;
+        _playerUtil.Teleport(request.Sender.EntityId, position);
+        _nextTeleportTime[request.Sender.CrossplatformId] = unixTime + _pluginConfig.Delay;
 
-        Reply(req.Sender, "Request accepted", ctx.ClientInfo.Name);
-        Reply(ctx.ClientInfo, "You accepted", req.Sender.Name);
+        Reply(request.Sender, "Request accepted", ctx.ClientInfo.Name);
+        Reply(ctx.ClientInfo, "You accepted", request.Sender.Name);
     }
 
     private void OnDeny(ICommandContext ctx)
     {
-        if (!_pending.TryGetValue(ctx.ClientInfo.CrossplatformId, out var req))
+        if (!_pending.TryGetValue(ctx.ClientInfo.CrossplatformId, out var request))
         {
             Reply(ctx.ClientInfo, "No pending request");
             return;
@@ -146,8 +164,8 @@ public class TpaPlugin : BasePlugin
 
         _pending.Remove(ctx.ClientInfo.CrossplatformId);
 
-        Reply(ctx.ClientInfo, "You denied", req.Sender.Name);
-        Reply(req.Sender, "Request denied", ctx.ClientInfo.Name);
+        Reply(ctx.ClientInfo, "You denied", request.Sender.Name);
+        Reply(request.Sender, "Request denied", ctx.ClientInfo.Name);
     }
 
     private List<ClientInfo> FindTargetByName(string name)
